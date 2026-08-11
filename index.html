@@ -290,7 +290,7 @@
     <div class="howto">
       <b>Cómo se juega:</b> coloca tus 5 barcos en tu tablero (clic para colocar, <b>ROTAR</b> para cambiar orientación, o <b>AL AZAR</b> para despliegue automático). Luego dispara por turnos a las aguas enemigas. El <b>Oficial de Comunicaciones</b> (un modelo de IA local) narrará cada hundimiento y el <b>Almirante Vorágine</b> te provocará por radio. Todo ocurre en tu dispositivo.
     </div>
-    <div class="credits">NARRACIÓN: GEMINI NANO (100% LOCAL) · MECÁNICA: CÓDIGO DETERMINISTA</div>
+    <div class="credits">NARRACIÓN: MANUAL ESTÁNDAR (EXPERIMENTO SIN IA) · MECÁNICA: CÓDIGO DETERMINISTA</div>
   </div>
 </div>
 
@@ -768,13 +768,13 @@ REGLAS:
     S.shotsPlayer=0; S.hitsPlayer=0;
     updateTurnBadge();
     renderFoe(); updatePips();
-    // sesión de narración (no bloqueante; si falla, el juego sigue con fallbacks)
-    if(S.api){
-      makeSession().then(sess=>{ S.session=sess; sysRadio("Canal de comunicaciones enlazado con el Oficial de IA."); })
-                 .catch(()=>{ S.session=null; sysRadio("Sin enlace IA: usaré el manual de radio estándar."); });
-    } else {
-      sysRadio("Sin modelo IA disponible: narración por manual estándar.");
-    }
+    // EXPERIMENTO: Gemini Nano deshabilitado a propósito. Toda la narración usa los
+    // mensajes fijos (FALLBACKS) de forma síncrona, sin ninguna llamada al LLM ni latencia,
+    // para descartar la latencia de la IA como causa de que el copiloto externo no se entere
+    // de la actividad de la partida. Para reactivar Gemini Nano, restaurar el bloque que
+    // llamaba a makeSession() y asignaba S.session.
+    S.session=null;
+    sysRadio("Modo experimental sin IA de narración: manual de radio estándar.");
     narrate("start",()=>"Da la orden de inicio de esta batalla naval en una frase épica.");
     $("commsLog").innerHTML=""; sysRadio("— Comienza la batalla —");
   }
