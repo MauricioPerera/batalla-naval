@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Batalla Naval · Comms de Guerra</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Ops+One&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --sea:#050e19; --sea2:#081527; --panel:#0a1e31; --panel2:#081826; --line:#123249;
+    --sonar:#2de0b6; --sonarDim:rgba(45,224,182,.12); --amber:#ffb347;
+    --fire:#ff5b3a; --danger:#ff3b4e; --steel:#8fa3b8; --steel2:#5c7186;
+    --ink:#e8f1f8; --mut:#7a93ab; --dim:#4a6076;
+    --disp:'Black Ops One',system-ui; --body:'Rajdhani',sans-serif; --mono:'Share Tech Mono',monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    font-family:var(--body); background:var(--sea); color:var(--ink); overflow:hidden; font-size:16px;
+    background-image:
+      radial-gradient(900px 600px at 50% -10%, rgba(21,64,94,.6), transparent 70%),
+      radial-gradient(700px 500px at 90% 110%, rgba(10,49,71,.5), transparent 70%),
+      repeating-linear-gradient(0deg, transparent 0 34px, rgba(255,255,255,.014) 34px 35px);
+  }
+  body::after{content:""; position:fixed; inset:0; pointer-events:none; z-index:1;
+    background:radial-gradient(130% 100% at 50% 30%, transparent 55%, rgba(0,0,0,.55));}
+  ::selection{background:var(--sonar); color:#04211a}
+  button{font-family:inherit; cursor:pointer}
+
+  .app{position:relative; z-index:2; display:flex; flex-direction:column; height:100vh; max-width:1280px; margin:0 auto; padding:0 1rem}
+
+  /* ============ HUD ============ */
+  .hud{display:flex; align-items:center; gap:1.2rem; padding:.7rem 0; flex-wrap:wrap}
+  .logo{font-family:var(--disp); font-size:clamp(1.1rem,2.4vw,1.6rem); letter-spacing:.04em; color:var(--ink);
+    text-shadow:0 0 22px rgba(45,224,182,.4)}
+  .logo small{display:block; font-family:var(--mono); font-size:.56rem; letter-spacing:.32em; color:var(--sonar)}
+  .fleets{display:flex; gap:1.2rem; margin-left:auto; align-items:center; flex-wrap:wrap}
+  .fleet-ind{display:flex; align-items:center; gap:.5rem; font-family:var(--mono); font-size:.72rem}
+  .fleet-ind .pips{display:flex; gap:3px}
+  .pip{width:14px; height:9px; border-radius:2px; background:var(--steel); transition:all .4s}
+  .pip.mine{background:var(--sonar)}
+  .pip.lost{background:#233; opacity:.5}
+  .turn-badge{font-family:var(--disp); font-size:.8rem; letter-spacing:.06em; padding:.4rem .9rem; border-radius:6px;
+    background:var(--panel); border:2px solid var(--line); color:var(--mut); transition:all .3s}
+  .turn-badge.you{border-color:var(--sonar); color:var(--sonar); box-shadow:0 0 16px rgba(45,224,182,.25)}
+  .turn-badge.foe{border-color:var(--danger); color:var(--danger); box-shadow:0 0 16px rgba(255,59,78,.25)}
+  .icon-btn{background:none; border:2px solid var(--line); color:var(--ink); border-radius:7px; width:38px; height:38px; font-size:1rem; transition:all .2s}
+  .icon-btn:hover{border-color:var(--sonar); transform:translateY(-2px)}
+
+  /* ============ TABLEROS ============ */
+  .boards{display:grid; grid-template-columns:1fr 1fr; gap:1.2rem; align-items:start; padding:.4rem 0}
+  .board-panel{background:linear-gradient(180deg,var(--panel),var(--panel2)); border:2px solid var(--line); border-radius:12px; padding:.9rem; box-shadow:0 14px 34px rgba(0,0,0,.4)}
+  .board-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:.6rem}
+  .board-title{font-family:var(--disp); font-size:.92rem; letter-spacing:.06em}
+  .board-title.foe{color:var(--danger)} .board-title.mine{color:var(--sonar)}
+  .board-sub{font-family:var(--mono); font-size:.6rem; letter-spacing:.16em; color:var(--dim)}
+
+  .board{display:inline-grid; grid-template-columns:auto repeat(8,var(--cell)); grid-template-rows:auto repeat(8,var(--cell));
+    gap:3px; --cell:clamp(26px,3.5vw,40px); position:relative}
+  .coord{display:grid; place-items:center; font-family:var(--mono); font-size:.68rem; color:var(--dim); user-select:none}
+  .cells-wrap{grid-column:2/10; grid-row:2/10; display:grid; grid-template-columns:repeat(8,var(--cell)); grid-template-rows:repeat(8,var(--cell)); gap:3px; position:relative}
+  .sonar-line{position:absolute; top:0; bottom:0; width:2px; background:linear-gradient(180deg,transparent,var(--sonar),transparent);
+    opacity:.5; animation:sonar 3.4s linear infinite; pointer-events:none; z-index:3}
+  @keyframes sonar{from{left:0}to{left:calc(100% - 2px)}}
+
+  .cell{background:var(--sea2); border:1px solid var(--line); border-radius:4px; display:grid; place-items:center;
+    font-size:calc(var(--cell)*.5); position:relative; transition:background .15s, transform .1s; user-select:none; overflow:hidden}
+  .board-panel.mine .cell{cursor:default}
+  .board-panel.foe .cell{cursor:crosshair}
+  .board-panel.foe .cell:hover{background:#0d2740; border-color:var(--sonar)}
+  .board-panel.foe .cell.shot{cursor:not-allowed}
+  .board-panel.foe .cell.shot:hover{background:var(--sea2); border-color:var(--line)}
+
+  .cell.ship{background:linear-gradient(135deg,var(--steel2),var(--steel)); border-color:#9db3c8; box-shadow:inset 0 0 6px rgba(0,0,0,.4)}
+  .cell.shot-water{background:#0a1e33}
+  .cell.shot-water::after{content:"✕"; color:#3b6c8f; font-size:calc(var(--cell)*.45); animation:pop .3s}
+  .cell.hit{background:radial-gradient(circle,#7a2410,#3a0f06); border-color:var(--fire)}
+  .cell.hit::after{content:"💥"; font-size:calc(var(--cell)*.55); animation:pop .35s}
+  .cell.sunk{background:radial-gradient(circle,#3a1a12,#1a0a06); border-color:#7a3b2a}
+  .cell.sunk::after{content:"🔥"; font-size:calc(var(--cell)*.5); animation:flick 1.2s infinite alternate}
+  @keyframes pop{from{transform:scale(2); opacity:0}to{transform:scale(1); opacity:1}}
+  @keyframes flick{from{opacity:.8; transform:scale(.95)}to{opacity:1; transform:scale(1.05)}}
+  .cell.preview-ok{background:rgba(45,224,182,.35); border-color:var(--sonar)}
+  .cell.preview-bad{background:rgba(255,59,78,.3); border-color:var(--danger)}
+  .cell.last-shot{outline:2px solid var(--amber); outline-offset:1px}
+  .shake{animation:shake .35s}
+  @keyframes shake{20%{transform:translateX(-5px)}45%{transform:translateX(4px)}70%{transform:translateX(-3px)}}
+
+  /* ============ CONSOLA INFERIOR ============ */
+  .console{display:grid; grid-template-columns:320px 1fr; gap:1.2rem; padding:.4rem 0 1rem; min-height:0; flex:1}
+  .panel{background:linear-gradient(180deg,var(--panel),var(--panel2)); border:2px solid var(--line); border-radius:12px; padding:.9rem; display:flex; flex-direction:column; min-height:0}
+  .panel-tag{font-family:var(--mono); font-size:.6rem; letter-spacing:.26em; color:var(--sonar); margin-bottom:.7rem; display:flex; align-items:center; gap:.5rem}
+  .panel-tag::before{content:"▸"}
+
+  /* controles setup */
+  .ship-list{display:flex; flex-direction:column; gap:.4rem; margin-bottom:.8rem}
+  .ship-item{display:flex; align-items:center; gap:.6rem; padding:.4rem .6rem; border:2px solid var(--line); border-radius:7px; cursor:pointer; transition:all .15s; background:var(--sea2)}
+  .ship-item:hover{border-color:var(--steel)}
+  .ship-item.sel{border-color:var(--sonar); background:var(--sonarDim)}
+  .ship-item.placed{opacity:.45; cursor:default}
+  .ship-blocks{display:flex; gap:2px}
+  .sb{width:12px; height:12px; border-radius:2px; background:var(--steel)}
+  .ship-item.sel .sb{background:var(--sonar)}
+  .ship-name{font-size:.85rem; font-weight:600; letter-spacing:.04em}
+  .orient-tag{margin-left:auto; font-family:var(--mono); font-size:.6rem; color:var(--mut)}
+  .ctrl-btns{display:flex; flex-wrap:wrap; gap:.5rem; margin-top:auto}
+  .btn{font-family:var(--disp); font-size:.78rem; letter-spacing:.05em; padding:.6rem .9rem; border-radius:8px; border:2px solid var(--line); background:var(--sea2); color:var(--ink); transition:all .15s; flex:1}
+  .btn:hover:not(:disabled){transform:translateY(-2px); border-color:var(--sonar)}
+  .btn:disabled{opacity:.4; cursor:not-allowed}
+  .btn-primary{background:var(--sonar); border-color:var(--sonar); color:#04211a}
+  .btn-primary:hover:not(:disabled){box-shadow:0 6px 20px rgba(45,224,182,.35); border-color:var(--sonar)}
+  .btn-danger{border-color:rgba(255,59,78,.5); color:var(--danger)}
+  .btn-danger:hover:not(:disabled){border-color:var(--danger); background:rgba(255,59,78,.12)}
+
+  /* comunicaciones */
+  .comms{overflow:hidden}
+  #commsLog{flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:.5rem; padding-right:.4rem; font-family:var(--mono); font-size:.8rem; line-height:1.45}
+  #commsLog::-webkit-scrollbar{width:7px} #commsLog::-webkit-scrollbar-thumb{background:var(--line); border-radius:4px}
+  .radio-line{padding:.4rem .6rem; border-left:3px solid var(--sonar); background:rgba(45,224,182,.05); border-radius:0 6px 6px 0; animation:radioIn .3s}
+  .radio-line .who{display:block; font-size:.6rem; letter-spacing:.2em; color:var(--sonar); margin-bottom:.1rem}
+  .radio-line .msg{color:#c7e8dc}
+  .radio-line.foe{border-left-color:var(--danger); background:rgba(255,59,78,.06)}
+  .radio-line.foe .who{color:var(--danger)}
+  .radio-line.foe .msg{color:#f3c2c2}
+  .radio-line.sys{border-left-color:var(--amber); background:rgba(255,179,71,.05)}
+  .radio-line.sys .who{color:var(--amber)}
+  .radio-line.sys .msg{color:#ead9b5}
+  @keyframes radioIn{from{opacity:0; transform:translateY(8px)}}
+  .typing::after{content:"█"; animation:blink 1s infinite; color:var(--sonar)}
+  @keyframes blink{50%{opacity:0}}
+
+  /* ============ OVERLAYS ============ */
+  .overlay{position:fixed; inset:0; z-index:60; display:none; align-items:center; justify-content:center; background:rgba(3,10,18,.82); backdrop-filter:blur(6px); padding:1.2rem}
+  .overlay.show{display:flex}
+  .ov-panel{background:linear-gradient(180deg,var(--panel),var(--panel2)); border:2px solid var(--line); border-radius:14px; padding:2.2rem 2.4rem; max-width:540px; width:100%; max-height:92vh; overflow-y:auto; box-shadow:0 30px 70px rgba(0,0,0,.6); animation:ovIn .45s cubic-bezier(.2,1.3,.4,1)}
+  @keyframes ovIn{from{transform:scale(.88) translateY(24px); opacity:0}}
+  .ov-title{font-family:var(--disp); font-size:clamp(1.8rem,5vw,2.6rem); color:var(--sonar); text-align:center; line-height:1.1; text-shadow:0 0 26px rgba(45,224,182,.4)}
+  .ov-title.lose{color:var(--danger); text-shadow:0 0 26px rgba(255,59,78,.4)}
+  .ov-sub{text-align:center; color:var(--mut); font-size:.95rem; margin:.7rem 0 1.3rem; font-weight:500}
+  .ov-label{font-family:var(--mono); font-size:.6rem; letter-spacing:.26em; color:var(--dim); margin:1.1rem 0 .5rem}
+  .diff-row{display:grid; gap:.5rem}
+  .diff-row button{display:grid; grid-template-columns:1fr auto; align-items:center; gap:.15rem .8rem; text-align:left; background:var(--sea2); border:2px solid var(--line); border-radius:9px; padding:.6rem .9rem; color:var(--ink); transition:all .15s}
+  .diff-row button:hover{border-color:var(--steel); transform:translateY(-2px)}
+  .diff-row button.sel{border-color:var(--sonar); background:var(--sonarDim)}
+  .diff-row b{font-family:var(--disp); font-size:.82rem; letter-spacing:.04em}
+  .diff-row span{grid-column:1; font-size:.76rem; color:var(--mut)}
+  .diff-row em{grid-row:1/3; font-family:var(--mono); font-style:normal; font-size:.66rem; color:var(--amber)}
+  .btn-big{display:block; width:100%; margin-top:1.4rem; font-family:var(--disp); font-size:1.05rem; letter-spacing:.06em; background:var(--sonar); color:#04211a; border:none; border-radius:10px; padding:.95rem; transition:all .15s}
+  .btn-big:hover:not(:disabled){box-shadow:0 8px 26px rgba(45,224,182,.4); transform:translateY(-2px)}
+  .btn-big:disabled{opacity:.5; cursor:not-allowed}
+  .api-warn{background:rgba(255,179,71,.1); border:2px solid var(--amber); border-radius:8px; padding:.6rem .8rem; font-size:.8rem; color:var(--amber); margin-top:1rem; font-weight:600}
+  .howto{margin-top:1.2rem; border-top:2px dashed var(--line); padding-top:1rem; font-size:.82rem; color:var(--mut); font-weight:500; line-height:1.7}
+  .howto b{color:var(--ink)}
+  .credits{margin-top:.9rem; font-family:var(--mono); font-size:.56rem; letter-spacing:.16em; color:var(--dim); text-align:center}
+  .stats-grid{display:grid; grid-template-columns:1fr 1fr; gap:.5rem; margin:1rem 0}
+  .stat-box{background:var(--sea2); border:2px solid var(--line); border-radius:8px; padding:.6rem; text-align:center}
+  .stat-box label{display:block; font-family:var(--mono); font-size:.56rem; letter-spacing:.18em; color:var(--dim)}
+  .stat-box b{font-family:var(--disp); font-size:1.3rem; color:var(--sonar)}
+  .narr-final{font-family:var(--mono); font-size:.82rem; color:#c7e8dc; background:var(--sea2); border-left:3px solid var(--sonar); border-radius:0 6px 6px 0; padding:.7rem .8rem; margin-top:.8rem; min-height:2.4em; line-height:1.5}
+  .btn-row{display:flex; gap:.6rem; margin-top:1.2rem}
+  .btn-row button{flex:1; font-family:var(--disp); font-size:.8rem; padding:.75rem; border-radius:9px; transition:all .15s}
+  .btn-again{background:var(--sonar); color:#04211a; border:none}
+  .btn-again:hover{transform:translateY(-2px); box-shadow:0 6px 18px rgba(45,224,182,.35)}
+  .btn-config{background:none; border:2px solid var(--line); color:var(--mut)}
+  .btn-config:hover{border-color:var(--steel); color:var(--ink)}
+
+  .confetti{position:fixed; top:-20px; z-index:80; pointer-events:none; animation:fall linear forwards}
+  @keyframes fall{to{transform:translateY(110vh) rotate(700deg)}}
+
+  @media (max-width:900px){
+    body{overflow:auto}
+    .app{height:auto; min-height:100vh}
+    .boards{grid-template-columns:1fr}
+    .console{grid-template-columns:1fr}
+    .board{--cell:clamp(28px,9vw,38px)}
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="hud">
+    <div class="logo">BATALLA NAVAL<small>COMMS DE GUERRA · GEMINI NANO</small></div>
+    <div class="fleets">
+      <div class="fleet-ind"><span style="color:var(--sonar)">TU FLOTA</span><div class="pips" id="pipsMine"></div></div>
+      <div class="fleet-ind"><span style="color:var(--danger)">ENEMIGO</span><div class="pips" id="pipsFoe"></div></div>
+    </div>
+    <div class="turn-badge" id="turnBadge">EN ESPERA</div>
+    <button class="icon-btn" id="btnMute">🔊</button>
+  </header>
+
+  <main class="boards">
+    <section class="board-panel mine">
+      <div class="board-head">
+        <span class="board-title mine">⚓ TU FLOTA</span>
+        <span class="board-sub" id="mineSub">DESPLIEGA TUS BARCOS</span>
+      </div>
+      <div class="board" id="boardMine"></div>
+    </section>
+
+    <section class="board-panel foe">
+      <div class="board-head">
+        <span class="board-title foe">🎯 AGUAS ENEMIGAS</span>
+        <span class="board-sub" id="foeSub">DISPARA AQUÍ</span>
+      </div>
+      <div class="board" id="boardEnemy"></div>
+    </section>
+  </main>
+
+  <section class="console">
+    <div class="panel" id="ctrlPanel">
+      <div class="panel-tag" id="ctrlTag">DESPLIEGUE</div>
+
+      <div id="setupControls">
+        <div class="ship-list" id="shipList"></div>
+        <div class="ctrl-btns">
+          <button class="btn" id="btnRotate">⟳ ROTAR</button>
+          <button class="btn" id="btnRandom">🎲 AL AZAR</button>
+          <button class="btn btn-danger" id="btnClearSetup">✕ LIMPIAR</button>
+        </div>
+        <div class="ctrl-btns" style="margin-top:.5rem">
+          <button class="btn btn-primary" id="btnStartBattle" disabled>⚔ ¡ZARPAR!</button>
+        </div>
+      </div>
+
+      <div id="battleControls" style="display:none">
+        <p style="font-size:.9rem; color:var(--mut); line-height:1.6; margin-bottom:.8rem">
+          Dispara a las <b style="color:var(--danger)">aguas enemigas</b>. El oficial de comunicaciones relatará cada impacto por radio.
+        </p>
+        <div class="ctrl-btns">
+          <button class="btn btn-danger" id="btnSurrender">🏳 RENDIRSE</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel comms">
+      <div class="panel-tag">RADIO · CANAL DE COMBATE</div>
+      <div id="commsLog"></div>
+    </div>
+  </section>
+</div>
+
+<!-- OVERLAY INICIO -->
+<div class="overlay show" id="ovStart">
+  <div class="ov-panel">
+    <div class="ov-title">BATALLA NAVAL</div>
+    <p class="ov-sub">Hunde la flota enemiga antes de que hunda la tuya. Un oficial de IA relatará la batalla por radio.</p>
+
+    <div class="ov-label">INTELIGENCIA ENEMIGA · DIFICULTAD</div>
+    <div class="diff-row" id="diffPick">
+      <button data-d="0" class="sel"><b>RECLUTA</b><em>aleatorio</em><span>Dispara sin estrategia. Ideal para empezar.</span></button>
+      <button data-d="1"><b>VETERANO</b><em>caza</em><span>Cuando toca, rastrea el barco hasta hundirlo.</span></button>
+      <button data-d="2"><b>ALMIRANTE VORÁGINE</b><em>letal</em><span>Patrón de paridad + rastreo por línea. Sin piedad.</span></button>
+    </div>
+
+    <div class="api-warn" id="apiWarn" style="display:none"></div>
+    <button class="btn-big" id="btnStart">⚓ IR AL DESPLIEGUE</button>
+
+    <div class="howto">
+      <b>Cómo se juega:</b> coloca tus 5 barcos en tu tablero (clic para colocar, <b>ROTAR</b> para cambiar orientación, o <b>AL AZAR</b> para despliegue automático). Luego dispara por turnos a las aguas enemigas. El <b>Oficial de Comunicaciones</b> (un modelo de IA local) narrará cada hundimiento y el <b>Almirante Vorágine</b> te provocará por radio. Todo ocurre en tu dispositivo.
+    </div>
+    <div class="credits">NARRACIÓN: GEMINI NANO (100% LOCAL) · MECÁNICA: CÓDIGO DETERMINISTA</div>
+  </div>
+</div>
+
+<!-- OVERLAY FINAL -->
+<div class="overlay" id="ovEnd">
+  <div class="ov-panel" style="max-width:460px">
+    <div class="ov-title" id="endTitle">VICTORIA</div>
+    <p class="ov-sub" id="endSub"></p>
+    <div class="stats-grid" id="endStats"></div>
+    <div class="narr-final" id="endNarr"></div>
+    <div class="btn-row">
+      <button class="btn-again" id="btnAgain">NUEVA BATALLA</button>
+      <button class="btn-config" id="btnConfig">CAMBIAR DIFICULTAD</button>
+    </div>
+  </div>
+</div>
+
+<!-- OVERLAY RENDICIÓN -->
+<div class="overlay" id="ovSurrender">
+  <div class="ov-panel" style="max-width:380px; text-align:center">
+    <div class="ov-title" style="font-size:1.6rem">¿RENDIR LA FLOTA?</div>
+    <p class="ov-sub">Se dará la batalla por perdida.</p>
+    <div class="btn-row">
+      <button class="btn-again" id="svYes" style="background:var(--danger); color:#fff">🏳 SÍ, RENDIRME</button>
+      <button class="btn-config" id="svNo">SEGUIR COMBATIENDO</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const $ = id => document.getElementById(id);
+
+  /* ================= CONFIG ================= */
+  const N = 8;
+  const SHIP_TYPES = [
+    {name:"Portaaviones", size:4},
+    {name:"Crucero", size:3},
+    {name:"Submarino", size:3},
+    {name:"Destructor", size:2},
+    {name:"Lancha", size:1},
+  ];
+  const COL_L = c => String.fromCharCode(65+c);
+  const cellName = (r,c) => COL_L(c)+(r+1);
+  const inB = (r,c) => r>=0 && r<N && c>=0 && c<N;
+
+  /* ================= ESTADO ================= */
+  const S = {
+    phase:"idle",           // idle | setup | battle | over
+    mine:null, foe:null,    // tableros
+    placing:0, horizontal:true,
+    turn:"player", busy:false,
+    shotsPlayer:0, hitsPlayer:0,
+    aiLevel:1,
+    api:null, session:null,
+    muted:localStorage.getItem("bn.muted")==="1",
+  };
+
+  /* ================= SONIDO ================= */
+  let actx=null;
+  function tone(f,d=.09,type="sine",g=.12,delay=0){
+    if(S.muted) return;
+    try{
+      actx=actx||new (window.AudioContext||window.webkitAudioContext)();
+      const o=actx.createOscillator(),v=actx.createGain(),t=actx.currentTime+delay;
+      o.type=type;o.frequency.value=f;v.gain.setValueAtTime(g,t);
+      v.gain.exponentialRampToValueAtTime(.0001,t+d);
+      o.connect(v).connect(actx.destination);o.start(t);o.stop(t+d);
+    }catch(e){}
+  }
+  function noiseBurst(d=.25,g=.18,delay=0){
+    if(S.muted) return;
+    try{
+      actx=actx||new (window.AudioContext||window.webkitAudioContext)();
+      const buf=actx.createBuffer(1,actx.sampleRate*d,actx.sampleRate);
+      const data=buf.getChannelData(0);
+      for(let i=0;i<data.length;i++) data[i]=(Math.random()*2-1)*Math.pow(1-i/data.length,2);
+      const src=actx.createBufferSource(); src.buffer=buf;
+      const v=actx.createGain(); v.gain.value=g;
+      src.connect(v).connect(actx.destination); src.start(actx.currentTime+delay);
+    }catch(e){}
+  }
+  const sfx={
+    shoot:()=>{ tone(880,.06,"square",.06); tone(440,.1,"sawtooth",.05,.04); },
+    splash:()=>{ tone(220,.15,"sine",.08); tone(160,.2,"sine",.06,.06); },
+    hit:()=>{ noiseBurst(.2,.2); tone(120,.2,"sawtooth",.12); },
+    sunk:()=>{ noiseBurst(.4,.25); tone(90,.4,"sawtooth",.14,.1); tone(60,.5,"sine",.12,.2); },
+    foeHit:()=>{ noiseBurst(.18,.15); tone(140,.18,"square",.08); },
+    win:()=>[523,659,784,1047,1318].forEach((f,i)=>tone(f,.18,"triangle",.12,i*.12)),
+    lose:()=>[392,330,262,196,147].forEach((f,i)=>tone(f,.25,"sawtooth",.07,i*.18)),
+  };
+
+  /* ================= API (Prompt API) ================= */
+  const AVAIL={readily:"available","after-download":"downloadable",no:"unavailable"};
+  function getApi(){
+    if("LanguageModel" in window) return {label:"LanguageModel",availability:()=>window.LanguageModel.availability(),create:o=>window.LanguageModel.create(o)};
+    if(window.ai?.languageModel) return {label:"window.ai",availability:async()=>{const c=await window.ai.languageModel.capabilities();return AVAIL[c.available]||"unavailable"},create:o=>window.ai.languageModel.create(o)};
+    return null;
+  }
+  async function initApi(){
+    const api=getApi();
+    if(!api) return {ok:false,msg:"Este navegador no expone la Prompt API (Chrome/Edge 138+). El juego funciona igual, pero sin narración IA."};
+    try{
+      const av=await api.availability();
+      if(av==="unavailable") return {ok:false,msg:"Prompt API no habilitada. Actívala en chrome://flags/#prompt-api-for-gemini-nano"};
+      if(av==="downloadable") return {ok:false,msg:"Gemini Nano no está descargado. Hazlo en chrome://on-device-ai-internals"};
+      if(av==="downloading") return {ok:false,msg:"Gemini Nano aún se descarga. Espera un poco."};
+      S.api=api; return {ok:true};
+    }catch(e){ return {ok:false,msg:"Error consultando la API: "+e.message}; }
+  }
+  async function makeSession(){
+    const sys=`Eres el Oficial de Comunicaciones del puente de mando de un buque de guerra en plena batalla naval.
+REGLAS:
+- Respondes SOLO con la frase narrada (máximo 20 palabras), sin comillas, sin prefijos, sin explicaciones.
+- Tono: épico naval, dramático, marinero, como una película de submarinos. En español.
+- Nunca reveles coordenadas exactas ni posiciones de barcos.
+- Si el mensaje empieza por "ENEMIGO:", respondes como el arrogante Almirante Vorágine (capitán enemigo), provocador y burlón.`;
+    try{ return await S.api.create({systemPrompt:sys, outputLanguage:"es"}); }
+    catch(e){ return await S.api.create({systemPrompt:sys}); }
+  }
+
+  /* ================= NARRACIÓN (cola asíncrona, no bloquea) ================= */
+  const FALLBACKS = {
+    start:["¡Todos a sus puestos! La batalla comienza.","Zarpamos. Que el mar nos sea propicio.","¡Zafarrancho de combate! Enemigo a la vista."],
+    pWater:["Salpicadura... nada. El mar guarda silencio.","Disparo al agua. El enemigo sigue oculto.","Fallamos. Las olas borran nuestro error.","Cerca, quizá. Pero agua."],
+    pHit:["¡Impacto directo! El casco enemigo cruje.","¡Le dimos! Fuego en la cubierta enemiga.","¡Blanco alcanzado! Se eleva humo en el horizonte."],
+    pSunk:["¡Hundido! El buque enemigo se va a pique.","¡Lo mandamos al fondo! Victoria parcial."],
+    fWater:["El enemigo dispara... y falla. Respiramos.","Salpicadura a estribor. Nos han fallado."],
+    fHit:["¡Nos han dado! Daños en cubierta.","¡Impacto enemigo! Esto se está poniendo feo."],
+    fSunk:["¡Hundieron uno de nuestros barcos!","¡Perdimos una nave! El mar la reclama."],
+    win:["¡Victoria! La flota enemiga descansa en el fondo.","El mar es nuestro. Victoria total."],
+    lose:["Nuestra flota ha caído. El enemigo domina estas aguas.","Derrota... El mar nos ha sido esquivo."],
+  };
+  const pick = a => a[Math.floor(Math.random()*a.length)];
+
+  const narrQueue=[]; let narrBusy=false;
+  function radio(who, text, cls=""){
+    const log=$("commsLog");
+    const d=document.createElement("div");
+    d.className="radio-line "+cls;
+    d.innerHTML=`<span class="who">${who}</span><span class="msg">${escapeHtml(text)}</span>`;
+    log.appendChild(d);
+    log.scrollTop=log.scrollHeight;
+  }
+  function escapeHtml(s){ return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+  function sysRadio(text){ radio("SISTEMA",text,"sys"); }
+
+  function narrate(fallbackKey, promptFn, cls="", who="OFICIAL COMMS", chance=1){
+    if(Math.random()>chance){ return; }
+    if(narrQueue.length>4){ return; } // no acumular demasiado
+    narrQueue.push({fallbackKey,promptFn,cls,who});
+    processNarr();
+  }
+  async function processNarr(){
+    if(narrBusy || !narrQueue.length) return;
+    narrBusy=true;
+    const item=narrQueue.shift();
+    let text = pick(FALLBACKS[item.fallbackKey]||["..."]);
+    if(S.session && item.promptFn){
+      try{
+        const out=await S.session.prompt(item.promptFn()+"\n(Responde SOLO la frase, máx 20 palabras, sin comillas.)");
+        const clean=String(out).replace(/^["'\s]+|["'\s]+$/g,"").replace(/^(OFICIAL COMMS|NARRADOR|FRASE)[:\s-]*/i,"").trim();
+        if(clean.length>=3 && clean.length<160) text=clean;
+      }catch(e){ /* fallback */ }
+    }
+    radio(item.who, text, item.cls);
+    narrBusy=false;
+    processNarr();
+  }
+
+  /* ================= TABLEROS ================= */
+  function makeBoard(){
+    return {
+      grid: Array.from({length:N},()=>Array.from({length:N},()=>({ship:null,shot:false,hit:false}))),
+      ships: SHIP_TYPES.map((s,i)=>({id:i,name:s.name,size:s.size,cells:[],hits:0,sunk:false,placed:false,horizontal:true})),
+    };
+  }
+  function getShipCells(r,c,size,h){
+    const cells=[];
+    for(let i=0;i<size;i++){ cells.push([h?r:r+i, h?c+i:c]); }
+    return cells;
+  }
+  function canPlace(board,r,c,size,h){
+    return getShipCells(r,c,size,h).every(([rr,cc])=>inB(rr,cc)&&board.grid[rr][cc].ship===null);
+  }
+  function placeShip(board,idx,r,c,h){
+    const ship=board.ships[idx];
+    const cells=getShipCells(r,c,ship.size,h);
+    ship.cells=cells; ship.placed=true; ship.horizontal=h;
+    cells.forEach(([rr,cc])=>board.grid[rr][cc].ship=idx);
+  }
+  function randomFleet(board){
+    board.ships.forEach(s=>{s.placed=false;s.cells=[];});
+    board.grid.forEach(row=>row.forEach(cell=>{cell.ship=null;}));
+    board.ships.forEach((ship,idx)=>{
+      let placed=false, guard=0;
+      while(!placed && guard++<500){
+        const h=Math.random()<.5;
+        const r=Math.floor(Math.random()*N), c=Math.floor(Math.random()*N);
+        if(canPlace(board,r,c,ship.size,h)){ placeShip(board,idx,r,c,h); placed=true; }
+      }
+    });
+  }
+  function shoot(board,r,c){
+    const cell=board.grid[r][c];
+    if(cell.shot) return {repeat:true};
+    cell.shot=true;
+    if(cell.ship!==null){
+      cell.hit=true;
+      const ship=board.ships[cell.ship];
+      ship.hits++;
+      if(ship.hits>=ship.size) ship.sunk=true;
+      return {hit:true, sunk:ship.sunk, ship};
+    }
+    return {hit:false, sunk:false, ship:null};
+  }
+
+  /* ================= IA ENEMIGA ================= */
+  const AI={shots:new Set(),queue:[],activeHits:[],level:1};
+  function aiReset(level){ AI.shots=new Set(); AI.queue=[]; AI.activeHits=[]; AI.level=level; }
+  function aiNextShot(){
+    while(AI.queue.length){
+      const [r,c]=AI.queue.shift();
+      if(inB(r,c)&&!AI.shots.has(r+","+c)) return [r,c];
+    }
+    const avail=[];
+    for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+      const k=r+","+c;
+      if(AI.shots.has(k)) continue;
+      if(AI.level===2 && (r+c)%2!==0) continue; // paridad
+      avail.push([r,c]);
+    }
+    if(!avail.length){
+      for(let r=0;r<N;r++)for(let c=0;c<N;c++){ const k=r+","+c; if(!AI.shots.has(k)) avail.push([r,c]); }
+    }
+    return avail[Math.floor(Math.random()*avail.length)];
+  }
+  function aiRegister(r,c,hit,sunk){
+    AI.shots.add(r+","+c);
+    if(AI.level===0) return;
+    if(hit && !sunk){
+      AI.activeHits.push([r,c]);
+      if(AI.level===2 && AI.activeHits.length>=2){
+        const rows=new Set(AI.activeHits.map(h=>h[0]));
+        const cols=new Set(AI.activeHits.map(h=>h[1]));
+        if(rows.size===1){
+          const row=AI.activeHits[0][0];
+          const cs=AI.activeHits.map(h=>h[1]);
+          const minC=Math.min(...cs)-1, maxC=Math.max(...cs)+1;
+          if(inB(row,maxC)) AI.queue.unshift([row,maxC]);
+          if(inB(row,minC)) AI.queue.unshift([row,minC]);
+        } else if(cols.size===1){
+          const col=AI.activeHits[0][1];
+          const rs=AI.activeHits.map(h=>h[0]);
+          const minR=Math.min(...rs)-1, maxR=Math.max(...rs)+1;
+          if(inB(maxR,col)) AI.queue.unshift([maxR,col]);
+          if(inB(minR,col)) AI.queue.unshift([minR,col]);
+        }
+      } else {
+        [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([nr,nc])=>{
+          if(inB(nr,nc)&&!AI.shots.has(nr+","+nc)) AI.queue.push([nr,nc]);
+        });
+      }
+    } else if(sunk){
+      AI.activeHits=[]; AI.queue=[];
+    }
+  }
+
+  /* ================= RENDER TABLEROS ================= */
+  function buildBoard(container, isEnemy){
+    container.innerHTML="";
+    const corner=document.createElement("div"); corner.className="coord"; container.appendChild(corner);
+    for(let c=0;c<N;c++){ const d=document.createElement("div"); d.className="coord"; d.textContent=COL_L(c); container.appendChild(d); }
+    const wrap=document.createElement("div"); wrap.className="cells-wrap";
+    if(isEnemy){ const sl=document.createElement("div"); sl.className="sonar-line"; wrap.appendChild(sl); }
+    for(let r=0;r<N;r++){
+      for(let c=0;c<N;c++){
+        const cell=document.createElement("div");
+        cell.className="cell"; cell.dataset.r=r; cell.dataset.c=c;
+        if(isEnemy){
+          cell.addEventListener("click",()=>onEnemyCellClick(r,c));
+        } else {
+          cell.addEventListener("mouseenter",()=>onMineHover(r,c));
+          cell.addEventListener("mouseleave",clearPreview);
+          cell.addEventListener("click",()=>onMineClick(r,c));
+        }
+        wrap.appendChild(cell);
+      }
+    }
+    container.appendChild(wrap);
+    // labels de fila (números)
+    for(let r=0;r<N;r++){
+      const lbl=document.createElement("div"); lbl.className="coord"; lbl.textContent=r+1;
+      lbl.style.gridColumn="1"; lbl.style.gridRow=(r+2);
+      container.appendChild(lbl);
+    }
+    return wrap;
+  }
+  let wrapMine, wrapFoe;
+  function cellEl(wrap,r,c){ return wrap.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`); }
+
+  function renderMine(){
+    for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+      const el=cellEl(wrapMine,r,c); const cell=S.mine.grid[r][c];
+      el.className="cell"; el.textContent="";
+      if(cell.ship!==null){
+        el.classList.add("ship");
+        if(cell.shot){ el.classList.add(cell.hit?"hit":"shot-water"); if(cell.hit) el.textContent="💥"; }
+        if(cell.hit && S.mine.ships[cell.ship].sunk) el.classList.add("sunk");
+      } else if(cell.shot){
+        el.classList.add("shot-water");
+      }
+    }
+  }
+  function renderFoe(){
+    for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+      const el=cellEl(wrapFoe,r,c); const cell=S.foe.grid[r][c];
+      el.className="cell"; el.textContent="";
+      if(cell.shot){
+        el.classList.add("shot");
+        if(cell.hit){ el.classList.add("hit"); el.textContent="💥"; if(cell.ship!==null&&S.foe.ships[cell.ship].sunk){ el.classList.add("sunk"); el.textContent="🔥"; } }
+        else el.classList.add("shot-water");
+      }
+    }
+  }
+  function updatePips(){
+    const mk=(el,board,cls)=>{
+      el.innerHTML="";
+      board.ships.forEach(s=>{
+        const p=document.createElement("div");
+        p.className="pip "+cls+(s.sunk?" lost":"");
+        el.appendChild(p);
+      });
+    };
+    mk($("pipsMine"),S.mine,"mine");
+    mk($("pipsFoe"),S.foe,"");
+  }
+
+  /* ================= COLOCACIÓN (setup) ================= */
+  function buildShipList(){
+    const list=$("shipList"); list.innerHTML="";
+    S.mine.ships.forEach((ship,idx)=>{
+      const d=document.createElement("div");
+      d.className="ship-item"+(ship.placed?" placed":"")+(idx===S.placing&&!ship.placed?" sel":"");
+      d.innerHTML=`<div class="ship-blocks">${'<div class="sb"></div>'.repeat(ship.size)}</div>
+        <span class="ship-name">${ship.name}</span>
+        <span class="orient-tag">${idx===S.placing&&!ship.placed?(S.horizontal?"HORIZ":"VERT"):""}</span>`;
+      if(!ship.placed) d.addEventListener("click",()=>{ S.placing=idx; buildShipList(); });
+      list.appendChild(d);
+    });
+  }
+  function currentPlacingShip(){
+    const ship=S.mine.ships[S.placing];
+    return (ship&&!ship.placed)?ship:null;
+  }
+  function onMineHover(r,c){
+    if(S.phase!=="setup") return;
+    const ship=currentPlacingShip(); if(!ship) return;
+    clearPreview();
+    const cells=getShipCells(r,c,ship.size,S.horizontal);
+    const ok=canPlace(S.mine,r,c,ship.size,S.horizontal);
+    cells.forEach(([rr,cc])=>{
+      if(inB(rr,cc)){ const el=cellEl(wrapMine,rr,cc); el.classList.add(ok?"preview-ok":"preview-bad"); }
+    });
+  }
+  function clearPreview(){
+    wrapMine.querySelectorAll(".preview-ok,.preview-bad").forEach(el=>el.classList.remove("preview-ok","preview-bad"));
+  }
+  function onMineClick(r,c){
+    if(S.phase!=="setup") return;
+    const ship=currentPlacingShip(); if(!ship) return;
+    if(!canPlace(S.mine,r,c,ship.size,S.horizontal)){
+      wrapMine.classList.add("shake"); setTimeout(()=>wrapMine.classList.remove("shake"),400);
+      tone(120,.15,"square",.08);
+      return;
+    }
+    placeShip(S.mine,S.placing,r,c,S.horizontal);
+    sfx.shoot();
+    renderMine();
+    // avanzar al siguiente sin colocar
+    const next=S.mine.ships.findIndex(s=>!s.placed);
+    S.placing=next>=0?next:S.placing;
+    buildShipList();
+    $("btnStartBattle").disabled=!S.mine.ships.every(s=>s.placed);
+    sysRadio(S.mine.ships.every(s=>s.placed)?"Flota desplegada. Lista para zarpar.":`${ship.name} posicionado.`);
+  }
+
+  $("btnRotate").addEventListener("click",()=>{ S.horizontal=!S.horizontal; buildShipList(); tone(500,.05,"sine",.06); });
+  $("btnRandom").addEventListener("click",()=>{
+    if(S.phase!=="setup") return;
+    randomFleet(S.mine);
+    renderMine(); buildShipList();
+    $("btnStartBattle").disabled=false;
+    sfx.shoot();
+    sysRadio("Despliegue automático completado.");
+  });
+  $("btnClearSetup").addEventListener("click",()=>{
+    if(S.phase!=="setup") return;
+    S.mine=makeBoard();
+    S.placing=0; S.horizontal=true;
+    renderMine(); buildShipList();
+    $("btnStartBattle").disabled=true;
+  });
+  document.addEventListener("keydown",e=>{
+    if(e.key.toLowerCase()==="r" && S.phase==="setup"){ S.horizontal=!S.horizontal; buildShipList(); }
+  });
+
+  /* ================= BATALLA ================= */
+  $("btnStartBattle").addEventListener("click",startBattle);
+  async function startBattle(){
+    if(!S.mine.ships.every(s=>s.placed)) return;
+    S.phase="battle";
+    $("setupControls").style.display="none";
+    $("battleControls").style.display="block";
+    $("ctrlTag").textContent="COMBATE";
+    $("mineSub").textContent="TU FLOTA · PROTEGE TUS NAVES";
+    randomFleet(S.foe);
+    aiReset(S.aiLevel);
+    S.turn="player"; S.busy=false;
+    S.shotsPlayer=0; S.hitsPlayer=0;
+    updateTurnBadge();
+    renderFoe(); updatePips();
+    // sesión de narración (no bloqueante; si falla, el juego sigue con fallbacks)
+    if(S.api){
+      makeSession().then(sess=>{ S.session=sess; sysRadio("Canal de comunicaciones enlazado con el Oficial de IA."); })
+                 .catch(()=>{ S.session=null; sysRadio("Sin enlace IA: usaré el manual de radio estándar."); });
+    } else {
+      sysRadio("Sin modelo IA disponible: narración por manual estándar.");
+    }
+    narrate("start",()=>"Da la orden de inicio de esta batalla naval en una frase épica.");
+    $("commsLog").innerHTML=""; sysRadio("— Comienza la batalla —");
+  }
+
+  function updateTurnBadge(){
+    const b=$("turnBadge");
+    if(S.phase!=="battle"){ b.textContent="EN ESPERA"; b.className="turn-badge"; return; }
+    if(S.turn==="player"){ b.textContent="🎯 TU TURNO"; b.className="turn-badge you"; }
+    else { b.textContent="⚠ TURNO ENEMIGO"; b.className="turn-badge foe"; }
+  }
+
+  function onEnemyCellClick(r,c){
+    if(S.phase!=="battle"||S.turn!=="player"||S.busy) return;
+    const cell=S.foe.grid[r][c];
+    if(cell.shot){
+      const el=cellEl(wrapFoe,r,c);
+      el.classList.add("shake"); setTimeout(()=>el.classList.remove("shake"),380);
+      tone(110,.12,"square",.07);
+      return;
+    }
+    playerShoot(r,c);
+  }
+
+  function playerShoot(r,c){
+    S.busy=true;
+    S.shotsPlayer++;
+    const res=shoot(S.foe,r,c);
+    const el=cellEl(wrapFoe,r,c);
+    el.classList.add("last-shot");
+    setTimeout(()=>wrapFoe.querySelectorAll(".last-shot").forEach(x=>x.classList.remove("last-shot")),1200);
+    sfx.shoot();
+
+    if(res.hit){
+      S.hitsPlayer++;
+      if(res.sunk){ sfx.sunk(); narrate("pSunk",()=>`Narra en una frase épica: acabamos de hundir el ${res.ship.name} enemigo.`); }
+      else { sfx.hit(); narrate("pHit",()=>"Narra en una frase breve: un disparo nuestro impactó un barco enemigo.",undefined,undefined,.8); }
+    } else {
+      sfx.splash();
+      narrate("pWater",null,"","",0); // agua: siempre fallback (frecuente)
+      if(Math.random()<.4) radio("OFICIAL COMMS",pick(FALLBACKS.pWater),"");
+    }
+    renderFoe(); updatePips();
+
+    if(S.foe.ships.every(s=>s.sunk)){
+      setTimeout(()=>endGame(true),700);
+      return;
+    }
+    // turno enemigo
+    S.turn="enemy"; S.busy=true; updateTurnBadge();
+    setTimeout(enemyTurn, 800);
+  }
+
+  function enemyTurn(){
+    const [r,c]=aiNextShot();
+    const res=shoot(S.mine,r,c);
+    aiRegister(r,c,res.hit,res.sunk);
+    const el=cellEl(wrapMine,r,c);
+    el.classList.add("last-shot");
+    setTimeout(()=>wrapMine.querySelectorAll(".last-shot").forEach(x=>x.classList.remove("last-shot")),1200);
+
+    if(res.hit){
+      if(res.sunk){
+        sfx.sunk();
+        narrate("fSunk",()=>`Narra en una frase dramática: el enemigo hundió nuestro ${res.ship.name}.`,"foe","OFICIAL COMMS");
+        narrate("pSunk",()=>`ENEMIGO: presume en una frase corta de haber hundido nuestro barco.`,"foe","ALM. VORÁGINE",.7);
+      } else {
+        sfx.foeHit();
+        narrate("fHit",()=>"Narra en una frase: un disparo enemigo impactó uno de nuestros barcos.",undefined,undefined,.75);
+      }
+      $("boardMine").closest(".board-panel").classList.add("shake");
+      setTimeout(()=>$("boardMine").closest(".board-panel").classList.remove("shake"),400);
+    } else {
+      sfx.splash();
+      if(Math.random()<.5) radio("OFICIAL COMMS",pick(FALLBACKS.fWater),"");
+    }
+    renderMine(); updatePips();
+
+    if(S.mine.ships.every(s=>s.sunk)){
+      setTimeout(()=>endGame(false),700);
+      return;
+    }
+    S.turn="player"; S.busy=false; updateTurnBadge();
+  }
+
+  $("btnSurrender").addEventListener("click",()=>{
+    if(S.phase==="battle") $("ovSurrender").classList.add("show");
+  });
+  $("svNo").addEventListener("click",()=>$("ovSurrender").classList.remove("show"));
+  $("svYes").addEventListener("click",()=>{
+    $("ovSurrender").classList.remove("show");
+    endGame(false,true);
+  });
+
+  /* ================= FIN DE PARTIDA ================= */
+  async function endGame(playerWon, surrendered=false){
+    S.phase="over"; S.busy=true;
+    updateTurnBadge();
+    // revelar tablero enemigo
+    for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+      const cell=S.foe.grid[r][c];
+      const el=cellEl(wrapFoe,r,c);
+      if(cell.ship!==null && !cell.shot){ el.classList.add("ship"); }
+    }
+    const accuracy=S.shotsPlayer?Math.round(100*S.hitsPlayer/S.shotsPlayer):0;
+    if(playerWon){ sfx.win(); confetti(); narrate("win",()=>"Narra la victoria naval en una frase triunfal."); }
+    else { sfx.lose(); narrate("lose",()=>surrendered?"Narra la rendición de nuestra flota en una frase solemne.":"Narra la derrota naval en una frase solemne."); }
+
+    $("endTitle").textContent=playerWon?"VICTORIA":"DERROTA";
+    $("endTitle").className="ov-title"+(playerWon?"":" lose");
+    $("endSub").textContent=playerWon?"La flota enemiga descansa en el fondo del mar.":(surrendered?"Has rendido la flota.":"Tu flota ha sido hundida.");
+    $("endStats").innerHTML=`
+      <div class="stat-box"><label>DISPAROS</label><b>${S.shotsPlayer}</b></div>
+      <div class="stat-box"><label>PRECISIÓN</label><b>${accuracy}%</b></div>
+      <div class="stat-box"><label>HUNDIDOS</label><b>${S.foe.ships.filter(s=>s.sunk).length}/5</b></div>
+      <div class="stat-box"><label>PERDIDOS</label><b>${S.mine.ships.filter(s=>s.sunk).length}/5</b></div>`;
+    $("endNarr").textContent="Elaborando informe de batalla…";
+    $("ovEnd").classList.add("show");
+
+    // informe narrado
+    let narr=pick(playerWon?FALLBACKS.win:FALLBACKS.lose);
+    if(S.session){
+      try{
+        const prompt=`Redacta un informe de batalla naval en 2 frases (máx 40 palabras). Resultado: ${playerWon?"victoria":"derrota"}. Precisión del jugador: ${accuracy}%. Enemigos hundidos: ${S.foe.ships.filter(s=>s.sunk).length}/5. Naves propias perdidas: ${S.mine.ships.filter(s=>s.sunk).length}/5. Tono ${playerWon?"triunfal":"solemne"}.`;
+        const out=await S.session.prompt(prompt+"\n(Responde SOLO el informe, sin prefijos.)");
+        const clean=String(out).replace(/^["'\s]+|["'\s]+$/g,"").trim();
+        if(clean.length>=8 && clean.length<240) narr=clean;
+      }catch(e){}
+    }
+    $("endNarr").textContent=narr;
+  }
+
+  function confetti(){
+    const colors=["#2de0b6","#ffb347","#ff5b3a","#8fa3b8","#e8f1f8"];
+    for(let i=0;i<60;i++){
+      const c=document.createElement("div");
+      c.className="confetti";
+      const s=6+Math.random()*8;
+      c.style.cssText=`left:${Math.random()*100}vw;width:${s}px;height:${s*1.3}px;background:${colors[Math.floor(Math.random()*colors.length)]};animation-duration:${1.8+Math.random()*2}s;animation-delay:${Math.random()*.7}s;border-radius:2px`;
+      document.body.appendChild(c);
+      setTimeout(()=>c.remove(),4500);
+    }
+  }
+
+  /* ================= OVERLAYS / INICIO ================= */
+  $("diffPick").addEventListener("click",e=>{
+    const b=e.target.closest("button"); if(!b) return;
+    $("diffPick").querySelectorAll("button").forEach(x=>x.classList.remove("sel"));
+    b.classList.add("sel"); S.aiLevel=+b.dataset.d;
+    tone(520,.05,"sine",.06);
+  });
+  $("btnStart").addEventListener("click",async ()=>{
+    $("btnStart").disabled=true;
+    const r=await initApi();
+    if(!r.ok){
+      $("apiWarn").style.display="block";
+      $("apiWarn").textContent="⚠ "+r.msg;
+      if(!S.api){ /* permitir jugar sin IA */ }
+    }
+    $("btnStart").disabled=false;
+    $("ovStart").classList.remove("show");
+    beginSetup();
+  });
+  function beginSetup(){
+    S.phase="setup";
+    S.mine=makeBoard(); S.foe=makeBoard();
+    S.placing=0; S.horizontal=true;
+    $("setupControls").style.display="block";
+    $("battleControls").style.display="none";
+    $("ctrlTag").textContent="DESPLIEGUE";
+    $("mineSub").textContent="COLOCA TUS BARCOS";
+    $("foeSub").textContent="AÚN NO DISPONIBLE";
+    $("btnStartBattle").disabled=true;
+    $("commsLog").innerHTML="";
+    wrapMine=buildBoard($("boardMine"),false);
+    wrapFoe=buildBoard($("boardEnemy"),true);
+    renderMine(); renderFoe(); buildShipList(); updatePips();
+    updateTurnBadge();
+    sysRadio("Despliega tu flota. Clic para colocar, ROTAR (o tecla R) para girar.");
+  }
+  $("btnAgain").addEventListener("click",()=>{ $("ovEnd").classList.remove("show"); beginSetup(); });
+  $("btnConfig").addEventListener("click",()=>{
+    $("ovEnd").classList.remove("show");
+    $("ovStart").classList.add("show");
+  });
+  $("btnMute").addEventListener("click",()=>{
+    S.muted=!S.muted;
+    localStorage.setItem("bn.muted",S.muted?"1":"0");
+    $("btnMute").textContent=S.muted?"🔇":"🔊";
+  });
+  $("btnMute").textContent=S.muted?"🔇":"🔊";
+
+  // pre-montar tableros vacíos para el fondo
+  S.mine=makeBoard(); S.foe=makeBoard();
+  wrapMine=buildBoard($("boardMine"),false);
+  wrapFoe=buildBoard($("boardEnemy"),true);
+  renderMine(); renderFoe(); updatePips();
+})();
+</script>
+</body>
+</html>
