@@ -195,10 +195,12 @@
      exacto y verificado, no lo interpretes visualmente: cópialo tal cual.
   2) PARTE DE RADIO — el panel "RADIO · CANAL DE COMBATE": mantente al pendiente de esas líneas a medida que aparecen, son
      tu fuente de contexto narrativo sobre cómo avanza la batalla, incluidos los avisos de cambio de turno. Remitentes:
-     OFICIAL COMMS (narra impactos y hundimientos en ambos bandos), SISTEMA (avisos técnicos y de turno) y ALM. VORÁGINE
-     (el capitán enemigo, que provoca por radio cuando nos golpea o hunde una nave nuestra). Usa esas líneas para saber si
-     acabamos de sufrir un golpe, si el enemigo se jacta de algo, o si el tono de la batalla está cambiando — no solo mires
-     los números. Si el turno actual es del enemigo, dilo y espera: no tiene sentido sugerir un disparo todavía.
+     OFICIAL COMMS (narra impactos y hundimientos en ambos bandos, con cierta demora), SISTEMA (avisos técnicos y de turno),
+     PARTE DE TIRO (el reporte factual e INSTANTÁNEO de cada disparo — "Disparo propio/enemigo a X#: AGUA|IMPACTO|HUNDIDO";
+     este SIEMPRE existe apenas se dispara, es tu fuente de verdad más rápida, no esperes a OFICIAL COMMS) y ALM. VORÁGINE
+     (el capitán enemigo, que provoca por radio cuando nos golpea o hunde una nave nuestra). Si te preguntan "¿ya hay
+     resultado de mi disparo?", mira primero el ÚLTIMO mensaje de PARTE DE TIRO, no OFICIAL COMMS. Si el turno actual es
+     del enemigo, dilo y espera: no tiene sentido sugerir un disparo todavía.
   Si el turno es del jugador y te piden consejo, combina ambas fuentes y responde SIEMPRE en este formato, en tu papel de
   oficial táctico:
   "Coordenada: [Letra][Número] — <frase breve explicando el porqué, ej. 'presión sobre la línea 4, Capitán, ahí quedó algo herido'>"
@@ -263,6 +265,7 @@
 
     <div class="panel comms">
       <div class="panel-tag">RADIO · CANAL DE COMBATE</div>
+      <div class="sr-only" id="lastShotReport" aria-live="assertive">Parte de tiro: aún no se ha disparado.</div>
       <div id="commsLog" role="log" aria-live="polite" aria-label="Parte de radio: mensajes del Oficial de Comunicaciones y del Almirante Vorágine, en orden cronológico"></div>
     </div>
   </section>
@@ -435,6 +438,19 @@ REGLAS:
   }
   function escapeHtml(s){ return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
   function sysRadio(text){ radio("SISTEMA",text,"sys"); }
+
+  // Reporte de disparo determinista e inmediato (no depende del LLM ni de ningún "chance" aleatorio).
+  // La narración de sabor (narrate) puede tardar segundos o incluso no aparecer; este reporte SIEMPRE
+  // existe apenas se resuelve el disparo, para que cualquier lector (humano o asistente de IA) tenga
+  // de inmediato el hecho confirmado, sin tener que esperar ni adivinar si ya "llegó" el parte.
+  function reportShot(name, side, res){
+    let text;
+    if(!res.hit) text=`Disparo ${side} a ${name}: AGUA.`;
+    else if(res.sunk) text=`Disparo ${side} a ${name}: IMPACTO — ${res.ship.name} HUNDIDO.`;
+    else text=`Disparo ${side} a ${name}: IMPACTO.`;
+    $("lastShotReport").textContent="Parte de tiro: "+text;
+    radio("PARTE DE TIRO", text, "sys");
+  }
 
   function narrate(fallbackKey, promptFn, cls="", who="OFICIAL COMMS", chance=1){
     if(Math.random()>chance){ return; }
@@ -786,6 +802,7 @@ REGLAS:
     S.busy=true;
     S.shotsPlayer++;
     const res=shoot(S.foe,r,c);
+    reportShot(cellName(r,c),"propio",res);
     const el=cellEl(wrapFoe,r,c);
     el.classList.add("last-shot");
     setTimeout(()=>wrapFoe.querySelectorAll(".last-shot").forEach(x=>x.classList.remove("last-shot")),1200);
@@ -815,6 +832,7 @@ REGLAS:
   function enemyTurn(){
     const [r,c]=aiNextShot();
     const res=shoot(S.mine,r,c);
+    reportShot(cellName(r,c),"enemigo",res);
     aiRegister(r,c,res.hit,res.sunk);
     const el=cellEl(wrapMine,r,c);
     el.classList.add("last-shot");
